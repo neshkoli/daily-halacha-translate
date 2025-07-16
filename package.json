@@ -1,0 +1,26 @@
+{
+  "name": "daily-halacha-translate",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/neshkoli/daily-halacha-translate.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/neshkoli/daily-halacha-translate/issues"
+  },
+  "homepage": "https://github.com/neshkoli/daily-halacha-translate#readme",
+  "dependencies": {
+    "axios": "^1.10.0",
+    "dotenv": "^17.2.0",
+    "express": "^5.1.0"
+  }
+}
