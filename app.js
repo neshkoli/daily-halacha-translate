@@ -1,5 +1,8 @@
 // Import Express.js
 const express = require('express');
+// Import dotenv to load environment variables
+require('dotenv').config();
+const axios = require('axios');
 
 // Create an Express app
 const app = express();
@@ -10,6 +13,8 @@ app.use(express.json());
 // Set port and verify_token
 const port = process.env.PORT || 3000;
 const verifyToken = process.env.VERIFY_TOKEN;
+const whatsappToken = process.env.WHATSAPP_TOKEN;
+const whatsappPhoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
 
 // Route for GET requests
 app.get('/', (req, res) => {
@@ -23,11 +28,49 @@ app.get('/', (req, res) => {
   }
 });
 
-// Route for POST requests
-app.post('/', (req, res) => {
+// Route for POST requests (WhatsApp webhook)
+app.post('/', async (req, res) => {
   const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 19);
   console.log(`\n\nWebhook received ${timestamp}\n`);
   console.log(JSON.stringify(req.body, null, 2));
+
+  // WhatsApp webhook structure
+  const entry = req.body.entry && req.body.entry[0];
+  const changes = entry && entry.changes && entry.changes[0];
+  const message = changes && changes.value && changes.value.messages && changes.value.messages[0];
+  const from = message && message.from;
+  const text = message && message.text && message.text.body;
+
+  if (from && text) {
+    let reply;
+    if (text.trim().toLowerCase() === '/help') {
+      reply = 'Welcome to the Daily Halacha WhatsApp bot!\nSend /help to see this message.';
+    } else {
+      reply = "Sorry, I didn't understand that. Send /help for options.";
+    }
+
+    // Send reply via WhatsApp API
+    try {
+      await axios.post(
+        `https://graph.facebook.com/v18.0/${whatsappPhoneNumberId}/messages`,
+        {
+          messaging_product: 'whatsapp',
+          to: from,
+          text: { body: reply },
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${whatsappToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+      console.log('Replied to WhatsApp user:', from);
+    } catch (err) {
+      console.error('Error sending WhatsApp message:', err.response ? err.response.data : err.message);
+    }
+  }
+
   res.status(200).end();
 });
 
