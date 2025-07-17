@@ -17,6 +17,8 @@ const port = process.env.PORT || 3000;
 const verifyToken = process.env.VERIFY_TOKEN;
 const whatsappToken = process.env.WHATSAPP_TOKEN;
 const whatsappPhoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+const geminiApiKey = process.env.GEMINI_API_KEY;
+const geminiEndpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 
 // Route for GET requests
 app.get('/', (req, res) => {
@@ -83,21 +85,33 @@ app.post('/', async (req, res) => {
       // --- PLACEHOLDER: Replace with your actual Gemini API call ---
       // Example: send audioBuffer (base64) and prompt as payload
       const geminiRes = await axios.post(
-        'YOUR_GEMINI_ENDPOINT',
+        geminiEndpoint,
         {
-          audio: audioBuffer.toString('base64'),
-          prompt: prompt,
-          // ...other params as needed
+          contents: [
+            {
+              parts: [
+                {
+                  inline_data: {
+                    mime_type: 'audio/ogg',
+                    data: audioBuffer.toString('base64')
+                  }
+                },
+                {
+                  text: prompt + '\n\nTranscribe this Hebrew audio and translate the transcription to English. Output only the English translation.'
+                }
+              ]
+            }
+          ]
         },
         {
           headers: {
-            'Authorization': `Bearer YOUR_GEMINI_API_KEY`,
+            'Authorization': `Bearer ${geminiApiKey}`,
             'Content-Type': 'application/json'
           }
         }
       );
       // Adjust this line to match your Gemini API response
-      const englishText = geminiRes.data.text || '[Gemini response placeholder]';
+      const englishText = geminiRes.data.candidates && geminiRes.data.candidates[0] && geminiRes.data.candidates[0].content && geminiRes.data.candidates[0].content.parts && geminiRes.data.candidates[0].content.parts[0].text || '[Gemini response placeholder]';
 
       // 7. Reply to the user with the English translation
       await axios.post(
