@@ -44,7 +44,22 @@ app.post('/', async (req, res) => {
   if (from && text) {
     let reply;
     if (text.trim().toLowerCase() === '/help') {
-      reply = 'Welcome to the Daily Halacha WhatsApp bot!\nSend /help to see this message.';
+      reply = 'Welcome to the Daily Halacha WhatsApp bot!\nSend /help to see this message.\nSend /daf for today\'s Daf Yomi.';
+    } else if (text.trim().toLowerCase() === '/daf') {
+      // Fetch Daf Yomi from Sefaria API
+      try {
+        const sefariaRes = await axios.get('https://www.sefaria.org.il/api/calendars');
+        const items = sefariaRes.data.calendar_items || [];
+        const dafYomi = items.find(item => item.title && item.title.en === 'Daf Yomi');
+        if (dafYomi && dafYomi.displayValue && dafYomi.displayValue.he && dafYomi.url) {
+          reply = `הדף היומי להיום: ${dafYomi.displayValue.he}\nhttps://sefaria.org.il/${dafYomi.url}`;
+        } else {
+          reply = 'לא נמצא דף יומי להיום.';
+        }
+      } catch (err) {
+        console.error('Error fetching Daf Yomi:', err.message);
+        reply = 'שגיאה בשליפת הדף היומי.';
+      }
     } else {
       reply = "Sorry, I didn't understand that. Send /help for options.";
     }
