@@ -1,0 +1,14 @@
+Please generate audio for the following text in the voice of a 35-year-old modern Orthodox Israeli rabbi. 
+He is giving his daily Halacha shiur (lesson) to an engaged audience of adults. His tone should be enthusiastic, and encouraging, aiming to make the ancient laws feel relevant and accessible.
+
+His English should be fluent but with a clear, modern Israeli Hebrew accent. This includes:
+
+Phonetics: The 'r' sound should be a uvular or velar fricative (like the French or German 'r'), not a tapped or trilled 'r'. 
+The 'h' sound should be pronounced, not silent. Vowel sounds should reflect modern Israeli pronunciation, for instance, the 'a' in 'father' rather than the 'a' in 'cat'.
+Intonation and Cadence: The delivery should have a very fast-paced, energetic cadence, about 50% faster than a typical speaking rate. Within this high speed, maintain a lively and somewhat melodic quality, carrying the traditional "learners' melody
+This is a speaking voice, but one that carries the traditional "learners' melody" (Niggun) often heard in Jewish study. 
+This means there should be a natural rise and fall in pitch, with emphasis placed on key legal terms and concepts. 
+The pace should be energetic but clear, with occasional slight accelerations when explaining a particularly interesting point, and deliberate pauses for emphasis before delivering a concluding ruling.
+Emotional Tenor: The overall feeling should be one of joy in the learning process. 
+The rabbi's voice should convey a smile, especially when offering a practical application or a positive concluding thought. 
+There should be a sense of warmth and a desire to connect with the listener, making the Halacha feel like a positive and life-affirming guide.
