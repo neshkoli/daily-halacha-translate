@@ -52,7 +52,37 @@ app.post('/', async (req, res) => {
         const items = sefariaRes.data.calendar_items || [];
         const dafYomi = items.find(item => item.title && item.title.en === 'Daf Yomi');
         if (dafYomi && dafYomi.displayValue && dafYomi.displayValue.he && dafYomi.url) {
-          reply = `הדף היומי להיום: ${dafYomi.displayValue.he}\nhttps://sefaria.org.il/${dafYomi.url}`;
+          const dafText = `הדף היומי להיום: ${dafYomi.displayValue.he}`;
+          const dafLink = `https://sefaria.org.il/${dafYomi.url}`;
+          // WhatsApp interactive message with button
+          await axios.post(
+            `https://graph.facebook.com/v18.0/${whatsappPhoneNumberId}/messages`,
+            {
+              messaging_product: 'whatsapp',
+              to: from,
+              type: 'interactive',
+              interactive: {
+                type: 'button',
+                body: { text: dafText },
+                action: {
+                  buttons: [
+                    {
+                      type: 'url',
+                      url: dafLink,
+                      title: 'לצפייה בדף'
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              headers: {
+                Authorization: `Bearer ${whatsappToken}`,
+                'Content-Type': 'application/json',
+              },
+            }
+          );
+          reply = null; // Already sent interactive message
         } else {
           reply = 'לא נמצא דף יומי להיום.';
         }
@@ -64,25 +94,27 @@ app.post('/', async (req, res) => {
       reply = "Sorry, I didn't understand that. Send /help for options.";
     }
 
-    // Send reply via WhatsApp API
-    try {
-      await axios.post(
-        `https://graph.facebook.com/v18.0/${whatsappPhoneNumberId}/messages`,
-        {
-          messaging_product: 'whatsapp',
-          to: from,
-          text: { body: reply },
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${whatsappToken}`,
-            'Content-Type': 'application/json',
+    if (reply) {
+      // Send reply via WhatsApp API
+      try {
+        await axios.post(
+          `https://graph.facebook.com/v18.0/${whatsappPhoneNumberId}/messages`,
+          {
+            messaging_product: 'whatsapp',
+            to: from,
+            text: { body: reply },
           },
-        }
-      );
-      console.log('Replied to WhatsApp user:', from);
-    } catch (err) {
-      console.error('Error sending WhatsApp message:', err.response ? err.response.data : err.message);
+          {
+            headers: {
+              Authorization: `Bearer ${whatsappToken}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        );
+        console.log('Replied to WhatsApp user:', from);
+      } catch (err) {
+        console.error('Error sending WhatsApp message:', err.response ? err.response.data : err.message);
+      }
     }
   }
 
