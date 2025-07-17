@@ -18,7 +18,8 @@ const verifyToken = process.env.VERIFY_TOKEN;
 const whatsappToken = process.env.WHATSAPP_TOKEN;
 const whatsappPhoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
 const geminiApiKey = process.env.GEMINI_API_KEY;
-const geminiEndpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+//const geminiEndpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+const geminiEndpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
 // Route for GET requests
 app.get('/', (req, res) => {
@@ -105,7 +106,7 @@ app.post('/', async (req, res) => {
         },
         {
           headers: {
-            'Authorization': `Bearer ${geminiApiKey}`,
+            'x-goog-api-key': geminiApiKey,
             'Content-Type': 'application/json'
           }
         }
@@ -227,3 +228,91 @@ app.post('/', async (req, res) => {
 app.listen(port, () => {
   console.log(`\nListening on port ${port}\n`);
 });
+
+// Local test function for debugging
+async function testTranscribeAndTranslate() {
+  try {
+    console.log('Testing transcription and translation with sample.opus...');
+    
+    // Read the sample audio file
+    const audioFilePath = path.join(__dirname, 'sample.opus');
+    if (!fs.existsSync(audioFilePath)) {
+      console.error('sample.opus not found in the current directory');
+      return;
+    }
+    
+    const audioBuffer = fs.readFileSync(audioFilePath);
+    console.log('Audio file loaded, size:', audioBuffer.length, 'bytes');
+    
+    // Read prompt.txt for instructions
+    const promptPath = path.join(__dirname, 'prompt.txt');
+    let prompt = '';
+    try {
+      prompt = fs.readFileSync(promptPath, 'utf8');
+      console.log('Prompt loaded from prompt.txt');
+    } catch (e) {
+      console.warn('prompt.txt not found, using default prompt');
+      prompt = 'Please transcribe and translate this Hebrew audio to English.';
+    }
+    
+    // Check if Gemini API key is available
+    if (!geminiApiKey) {
+      console.error('GEMINI_API_KEY environment variable is not set');
+      return;
+    }
+    
+    console.log('Sending to Gemini API...');
+    const geminiRes = await axios.post(
+      geminiEndpoint,
+      {
+        contents: [
+          {
+            parts: [
+              {
+                inline_data: {
+                  mime_type: 'audio/ogg',
+                  data: audioBuffer.toString('base64')
+                }
+              },
+              {
+                text: prompt + '\n\nTranscribe this Hebrew audio and translate the transcription to English. Output only the English translation.'
+              }
+            ]
+          }
+        ]
+      },
+      {
+        headers: {
+          'x-goog-api-key': geminiApiKey,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    
+    console.log('Gemini API Response:', JSON.stringify(geminiRes.data, null, 2));
+    
+    const englishText = geminiRes.data.candidates && geminiRes.data.candidates[0] && geminiRes.data.candidates[0].content && geminiRes.data.candidates[0].content.parts && geminiRes.data.candidates[0].content.parts[0].text || '[No text found in response]';
+    
+    console.log('\n=== TRANSLATION RESULT ===');
+    console.log(englishText);
+    console.log('=== END TRANSLATION ===\n');
+    
+  } catch (err) {
+    console.error('Error in test function:', err.message);
+    if (err.response) {
+      console.error('API Error Response:', err.response.data);
+      console.error('API Error Status:', err.response.status);
+    }
+  }
+}
+
+// Run test if command line argument is provided
+if (process.argv.includes('--test')) {
+  testTranscribeAndTranslate().then(() => {
+    console.log('Test completed');
+    process.exit(0);
+  }).catch(err => {
+    console.error('Test failed:', err);
+    process.exit(1);
+  });
+}
