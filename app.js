@@ -165,35 +165,7 @@ app.post('/', async (req, res) => {
           const dafLink = `https://sefaria.org.il/${dafYomi.url}`;
           console.log('Daf Yomi:', dafText);
           console.log('Daf Link:', dafLink);
-          // WhatsApp interactive message with button
-          await axios.post(
-            `https://graph.facebook.com/v23.0/${whatsappPhoneNumberId}/messages`,
-            {
-              messaging_product: 'whatsapp',
-              to: from,
-              type: 'interactive',
-              interactive: {
-                type: 'button',
-                body: { text: dafText },
-                action: {
-                  buttons: [
-                    {
-                      type: 'url',
-                      url: dafLink,
-                      title: 'לצפייה בדף'
-                    }
-                  ]
-                }
-              }
-            },
-            {
-              headers: {
-                Authorization: `Bearer ${whatsappToken}`,
-                'Content-Type': 'application/json',
-              },
-            }
-          );
-          reply = null; // Already sent interactive message
+          reply = `${dafText}\n${dafLink}`;
         } else {
           reply = 'לא נמצא דף יומי להיום.';
         }
