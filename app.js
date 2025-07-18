@@ -8,6 +8,15 @@ const ffmpeg = require('fluent-ffmpeg');
 const { GoogleGenAI } = require('@google/genai');
 const wav = require('wav');
 
+// Configure axios for SSL issues
+const https = require('https');
+const axiosInstance = axios.create({
+  httpsAgent: new https.Agent({
+    rejectUnauthorized: false
+  }),
+  timeout: 30000
+});
+
 // Create an Express app
 const app = express();
 
@@ -100,6 +109,9 @@ async function generateSpeech(text, prompt) {
   }
 }
 
+// Track processed messages to avoid duplicates
+const processedMessages = new Set();
+
 // Route for GET requests (webhook verification)
 app.get('/', (req, res) => {
   const { 'hub.mode': mode, 'hub.challenge': challenge, 'hub.verify_token': token } = req.query;
@@ -128,9 +140,21 @@ app.post('/', async (req, res) => {
 
   // Handle audio messages
   if (from && audioMessage) {
+    const messageId = audioMessage.id;
+    
+    // Check if we've already processed this message
+    if (processedMessages.has(messageId)) {
+      console.log('Message already processed, skipping:', messageId);
+      res.status(200).end();
+      return;
+    }
+    
+    // Mark message as processed
+    processedMessages.add(messageId);
+    
     try {
       // Send immediate response that processing has started
-      await axios.post(
+      await axiosInstance.post(
         `https://graph.facebook.com/v23.0/${whatsappPhoneNumberId}/messages`,
         {
           messaging_product: 'whatsapp',
@@ -148,13 +172,13 @@ app.post('/', async (req, res) => {
 
       // Download audio from WhatsApp
       const mediaId = audioMessage.id;
-      const mediaRes = await axios.get(
+      const mediaRes = await axiosInstance.get(
         `https://graph.facebook.com/v23.0/${mediaId}`,
         { headers: { Authorization: `Bearer ${whatsappToken}` } }
       );
       const mediaUrl = mediaRes.data.url;
 
-      const audioRes = await axios.get(mediaUrl, {
+      const audioRes = await axiosInstance.get(mediaUrl, {
         headers: { Authorization: `Bearer ${whatsappToken}` },
         responseType: 'arraybuffer'
       });
@@ -192,53 +216,81 @@ app.post('/', async (req, res) => {
           .save(mp3Path);
       });
 
-      // Send the English translation as text
-      await axios.post(
-        `https://graph.facebook.com/v23.0/${whatsappPhoneNumberId}/messages`,
-        {
-          messaging_product: 'whatsapp',
-          to: from,
-          text: { body: englishText }
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${whatsappToken}`,
-            'Content-Type': 'application/json'
+      // Upload MP3 to WhatsApp Media API
+      const mp3Buffer = fs.readFileSync(mp3Path);
+      
+      try {
+        const uploadRes = await axiosInstance.post(
+          `https://graph.facebook.com/v23.0/${whatsappPhoneNumberId}/media`,
+          {
+            messaging_product: 'whatsapp',
+            file: mp3Buffer.toString('base64'),
+            type: 'audio/mpeg',
+            filename: `translation-${mediaId}.mp3`
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${whatsappToken}`,
+              'Content-Type': 'application/json'
+            }
           }
-        }
-      );
+        );
 
-      // Send audio file to WhatsApp
-      await axios.post(
-        `https://graph.facebook.com/v23.0/${whatsappPhoneNumberId}/messages`,
-        {
-          messaging_product: 'whatsapp',
-          to: from,
-          type: 'audio',
-          audio: {
-            link: `https://your-domain.com/audio-${mediaId}.mp3` // You'll need to host this file
+        const uploadedMediaId = uploadRes.data.id;
+
+        // Send audio file to WhatsApp using the uploaded media ID
+        await axiosInstance.post(
+          `https://graph.facebook.com/v23.0/${whatsappPhoneNumberId}/messages`,
+          {
+            messaging_product: 'whatsapp',
+            to: from,
+            type: 'audio',
+            audio: {
+              id: uploadedMediaId
+            }
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${whatsappToken}`,
+              'Content-Type': 'application/json'
+            }
           }
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${whatsappToken}`,
-            'Content-Type': 'application/json'
+        );
+
+        console.log('Replied with audio translation to WhatsApp user:', from);
+      } catch (uploadError) {
+        console.error('Error uploading audio to WhatsApp:', uploadError.message);
+        
+        // Fallback: send the translation as text
+        await axiosInstance.post(
+          `https://graph.facebook.com/v23.0/${whatsappPhoneNumberId}/messages`,
+          {
+            messaging_product: 'whatsapp',
+            to: from,
+            text: { body: `Translation: ${englishText}` }
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${whatsappToken}`,
+              'Content-Type': 'application/json'
+            }
           }
-        }
-      );
+        );
+        
+        console.log('Sent translation as text due to audio upload failure');
+      }
 
       // Clean up files
       fs.unlinkSync(wavPath);
       fs.unlinkSync(mp3Path);
 
-      console.log('Replied with text translation and audio to WhatsApp user:', from);
       res.status(200).end();
       return;
 
     } catch (err) {
       console.error('Error processing audio message:', err.message);
       try {
-        await axios.post(
+        await axiosInstance.post(
           `https://graph.facebook.com/v23.0/${whatsappPhoneNumberId}/messages`,
           {
             messaging_product: 'whatsapp',
@@ -267,7 +319,7 @@ app.post('/', async (req, res) => {
       reply = 'Welcome to the Daily Halacha WhatsApp bot!\nSend /help to see this message.\nSend /daf for today\'s Daf Yomi.';
     } else if (text.trim().toLowerCase() === '/daf') {
       try {
-        const sefariaRes = await axios.get('https://www.sefaria.org.il/api/calendars');
+        const sefariaRes = await axiosInstance.get('https://www.sefaria.org.il/api/calendars');
         const items = sefariaRes.data.calendar_items || [];
         const dafYomi = items.find(item => item.title && item.title.en === 'Daf Yomi');
         if (dafYomi && dafYomi.displayValue && dafYomi.displayValue.he && dafYomi.url) {
@@ -287,7 +339,7 @@ app.post('/', async (req, res) => {
 
     if (reply) {
       try {
-        await axios.post(
+        await axiosInstance.post(
           `https://graph.facebook.com/v23.0/${whatsappPhoneNumberId}/messages`,
           {
             messaging_product: 'whatsapp',
