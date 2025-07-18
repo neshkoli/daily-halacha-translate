@@ -5,6 +5,9 @@ require('dotenv').config();
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
+const ffmpeg = require('fluent-ffmpeg');
+const { GoogleGenAI } = require('@google/genai');
+const wav = require('wav');
 
 // Create an Express app
 const app = express();
@@ -18,7 +21,6 @@ const verifyToken = process.env.VERIFY_TOKEN;
 const whatsappToken = process.env.WHATSAPP_TOKEN;
 const whatsappPhoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
 const geminiApiKey = process.env.GEMINI_API_KEY;
-//const geminiEndpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
 const geminiEndpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
 // Route for GET requests
@@ -297,6 +299,74 @@ async function testTranscribeAndTranslate() {
     console.log(englishText);
     console.log('=== END TRANSLATION ===\n');
     
+    // Generate audio from the English text using TTS
+    console.log('Generating audio from English text...');
+    const ttsRes = await axios.post(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent',
+      {
+        contents: [
+          {
+            parts: [
+              {
+                text: prompt + '\n\n' + englishText
+              }
+            ]
+          }
+        ],
+        generation_config: {
+          response_modalities: ['AUDIO'],
+          speech_config: {
+            voice_config: {
+              prebuilt_voice_config: {
+                voice_name: 'Enceladus'
+              }
+            }
+          }
+        }
+      },
+      {
+        headers: {
+          'x-goog-api-key': geminiApiKey,
+          'Content-Type': 'application/json'
+        },
+        responseType: 'arraybuffer'
+      }
+    );
+    
+    // Save the raw audio from Gemini as WAV for debugging
+    const rawAudioPath = path.join(__dirname, 'raw-gemini-audio.wav');
+    fs.writeFileSync(rawAudioPath, ttsRes.data);
+    console.log(`Raw Gemini audio saved to: ${rawAudioPath}`);
+    console.log('Raw audio size:', ttsRes.data.length, 'bytes');
+    
+    // Convert the raw audio to MP3 using ffmpeg
+    const audioOutputPath = path.join(__dirname, 'output-audio.mp3');
+    console.log('Converting raw audio to MP3...');
+    
+    await new Promise((resolve, reject) => {
+      ffmpeg(rawAudioPath)
+        .toFormat('mp3')
+        .audioCodec('libmp3lame')
+        .audioBitrate(128)
+        .on('start', (commandLine) => {
+          console.log('FFmpeg command:', commandLine);
+        })
+        .on('progress', (progress) => {
+          console.log('Processing: ' + progress.percent + '% done');
+        })
+        .on('end', () => {
+          console.log(`MP3 conversion completed: ${audioOutputPath}`);
+          const stats = fs.statSync(audioOutputPath);
+          console.log('Final MP3 file size:', stats.size, 'bytes');
+          resolve();
+        })
+        .on('error', (err) => {
+          console.error('FFmpeg error:', err);
+          reject(err);
+        })
+        .save(audioOutputPath);
+    });
+    
   } catch (err) {
     console.error('Error in test function:', err.message);
     if (err.response) {
@@ -313,6 +383,194 @@ if (process.argv.includes('--test')) {
     process.exit(0);
   }).catch(err => {
     console.error('Test failed:', err);
+    process.exit(1);
+  });
+}
+
+// Test audio conversion
+async function testAudioConversion() {
+  try {
+    console.log('Testing audio conversion from sample.opus to MP3...');
+    
+    const inputPath = path.join(__dirname, 'sample.opus');
+    const outputPath = path.join(__dirname, 'sample-converted.mp3');
+    
+    if (!fs.existsSync(inputPath)) {
+      console.error('sample.opus not found in the current directory');
+      return;
+    }
+    
+    console.log('Converting sample.opus to MP3...');
+    
+    await new Promise((resolve, reject) => {
+      ffmpeg(inputPath)
+        .toFormat('mp3')
+        .audioCodec('libmp3lame')
+        .audioBitrate(128)
+        .on('start', (commandLine) => {
+          console.log('FFmpeg command:', commandLine);
+        })
+        .on('progress', (progress) => {
+          console.log('Processing: ' + progress.percent + '% done');
+        })
+        .on('end', () => {
+          console.log(`MP3 conversion completed: ${outputPath}`);
+          const stats = fs.statSync(outputPath);
+          console.log('File size:', stats.size, 'bytes');
+          resolve();
+        })
+        .on('error', (err) => {
+          console.error('FFmpeg error:', err);
+          reject(err);
+        })
+        .save(outputPath);
+    });
+    
+  } catch (err) {
+    console.error('Error in audio conversion test:', err.message);
+  }
+}
+
+// Run audio conversion test if specified
+if (process.argv.includes('--convert')) {
+  testAudioConversion().then(() => {
+    console.log('Audio conversion test completed');
+    process.exit(0);
+  }).catch(err => {
+    console.error('Audio conversion test failed:', err);
+    process.exit(1);
+  });
+}
+
+// Helper function to save WAV file
+async function saveWaveFile(filename, pcmData, channels = 1, rate = 24000, sampleWidth = 2) {
+  return new Promise((resolve, reject) => {
+    const writer = new wav.FileWriter(filename, {
+      channels,
+      sampleRate: rate,
+      bitDepth: sampleWidth * 8,
+    });
+
+    writer.on('finish', resolve);
+    writer.on('error', reject);
+
+    writer.write(pcmData);
+    writer.end();
+  });
+}
+
+// Test TTS only (skip transcription)
+async function testTTSOnly() {
+  try {
+    console.log('Testing TTS with translation-results.txt...');
+    
+    // Read the translation results file
+    const translationPath = path.join(__dirname, 'translation-results.txt');
+    if (!fs.existsSync(translationPath)) {
+      console.error('translation-results.txt not found in the current directory');
+      return;
+    }
+    
+    const englishText = fs.readFileSync(translationPath, 'utf8');
+    console.log('Translation text loaded:', englishText.substring(0, 100) + '...');
+    
+    // Read prompt.txt for instructions
+    const promptPath = path.join(__dirname, 'prompt.txt');
+    let prompt = '';
+    try {
+      prompt = fs.readFileSync(promptPath, 'utf8');
+      console.log('Prompt loaded from prompt.txt');
+    } catch (e) {
+      console.warn('prompt.txt not found, using default prompt');
+      prompt = 'Please generate audio for the following text in the voice of a 35-year-old modern Orthodox Israeli rabbi.';
+    }
+    
+    // Check if Gemini API key is available
+    if (!geminiApiKey) {
+      console.error('GEMINI_API_KEY environment variable is not set');
+      return;
+    }
+    
+    console.log('Sending to Gemini TTS API...');
+    
+    // Use the official Google GenAI library
+    const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+    
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash-preview-tts",
+      contents: [{ 
+        parts: [{ 
+          text: prompt + '\n\n' + englishText 
+        }] 
+      }],
+      config: {
+        responseModalities: ['AUDIO'],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName: 'Enceladus' },
+          },
+        },
+      },
+    });
+    
+    const data = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    if (!data) {
+      console.error('No audio data received from Gemini');
+      return;
+    }
+    
+    const audioBuffer = Buffer.from(data, 'base64');
+    console.log('Audio data received, size:', audioBuffer.length, 'bytes');
+    
+    // Save as WAV file
+    const wavOutputPath = path.join(__dirname, 'tts-output.wav');
+    await saveWaveFile(wavOutputPath, audioBuffer);
+    console.log(`WAV file saved to: ${wavOutputPath}`);
+    
+    // Convert WAV to MP3 using ffmpeg
+    const mp3OutputPath = path.join(__dirname, 'tts-output.mp3');
+    console.log('Converting WAV to MP3...');
+    
+    await new Promise((resolve, reject) => {
+      ffmpeg(wavOutputPath)
+        .toFormat('mp3')
+        .audioCodec('libmp3lame')
+        .audioBitrate(128)
+        .on('start', (commandLine) => {
+          console.log('FFmpeg command:', commandLine);
+        })
+        .on('progress', (progress) => {
+          console.log('Processing: ' + progress.percent + '% done');
+        })
+        .on('end', () => {
+          console.log(`MP3 conversion completed: ${mp3OutputPath}`);
+          const stats = fs.statSync(mp3OutputPath);
+          console.log('Final MP3 file size:', stats.size, 'bytes');
+          resolve();
+        })
+        .on('error', (err) => {
+          console.error('FFmpeg error:', err);
+          reject(err);
+        })
+        .save(mp3OutputPath);
+    });
+    
+  } catch (err) {
+    console.error('Error in TTS test:', err.message);
+    if (err.response) {
+      console.error('API Error Response:', err.response.data);
+      console.error('API Error Status:', err.response.status);
+    }
+  }
+}
+
+// Run TTS only test if specified
+if (process.argv.includes('--tts-only')) {
+  testTTSOnly().then(() => {
+    console.log('TTS test completed');
+    process.exit(0);
+  }).catch(err => {
+    console.error('TTS test failed:', err);
     process.exit(1);
   });
 }
