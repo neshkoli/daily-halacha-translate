@@ -197,93 +197,26 @@ app.post('/', async (req, res) => {
       // Transcribe and translate
       const englishText = await transcribeAndTranslate(audioBuffer, prompt);
 
-      // Generate speech
-      const audioData = await generateSpeech(englishText, prompt);
-
-      // Save as WAV and convert to MP3
-      const wavPath = path.join(__dirname, `audio-${mediaId}.wav`);
-      const mp3Path = path.join(__dirname, `audio-${mediaId}.mp3`);
+      // Skip audio generation for now - only send text translation
+      console.log('Transcription and translation completed, sending as text...');
       
-      await saveWaveFile(wavPath, audioData);
-      
-      await new Promise((resolve, reject) => {
-        ffmpeg(wavPath)
-          .toFormat('mp3')
-          .audioCodec('libmp3lame')
-          .audioBitrate(128)
-          .on('end', resolve)
-          .on('error', reject)
-          .save(mp3Path);
-      });
-
-      // Upload MP3 to WhatsApp Media API
-      const mp3Buffer = fs.readFileSync(mp3Path);
-      
-      try {
-        const uploadRes = await axiosInstance.post(
-          `https://graph.facebook.com/v23.0/${whatsappPhoneNumberId}/media`,
-          {
-            messaging_product: 'whatsapp',
-            file: mp3Buffer.toString('base64'),
-            type: 'audio/mpeg',
-            filename: `translation-${mediaId}.mp3`
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${whatsappToken}`,
-              'Content-Type': 'application/json'
-            }
+      // Send the translation as text
+      await axiosInstance.post(
+        `https://graph.facebook.com/v23.0/${whatsappPhoneNumberId}/messages`,
+        {
+          messaging_product: 'whatsapp',
+          to: from,
+          text: { body: `🎤 Translation: ${englishText}` }
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${whatsappToken}`,
+            'Content-Type': 'application/json'
           }
-        );
+        }
+      );
 
-        const uploadedMediaId = uploadRes.data.id;
-
-        // Send audio file to WhatsApp using the uploaded media ID
-        await axiosInstance.post(
-          `https://graph.facebook.com/v23.0/${whatsappPhoneNumberId}/messages`,
-          {
-            messaging_product: 'whatsapp',
-            to: from,
-            type: 'audio',
-            audio: {
-              id: uploadedMediaId
-            }
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${whatsappToken}`,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
-
-        console.log('Replied with audio translation to WhatsApp user:', from);
-      } catch (uploadError) {
-        console.error('Error uploading audio to WhatsApp:', uploadError.message);
-        
-        // Fallback: send the translation as text
-        await axiosInstance.post(
-          `https://graph.facebook.com/v23.0/${whatsappPhoneNumberId}/messages`,
-          {
-            messaging_product: 'whatsapp',
-            to: from,
-            text: { body: `Translation: ${englishText}` }
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${whatsappToken}`,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
-        
-        console.log('Sent translation as text due to audio upload failure');
-      }
-
-      // Clean up files
-      fs.unlinkSync(wavPath);
-      fs.unlinkSync(mp3Path);
-
+      console.log('Replied with text translation to WhatsApp user:', from);
       res.status(200).end();
       return;
 
