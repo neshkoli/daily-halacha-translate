@@ -40,7 +40,6 @@ gcloud run deploy $SERVICE_NAME \
     --min-instances 0 \
     --max-instances 2 \
     --timeout 60s \
-    --set-env-vars "PORT=8080" \
     --concurrency 80
 
 echo "✅ Deployment completed!"
