@@ -109,6 +109,46 @@ async function generateSpeech(text, prompt) {
   }
 }
 
+// Function to get Hebrew date
+async function getHebrewDate() {
+  try {
+    const response = await axiosInstance.get('https://www.sefaria.org.il/api/calendars');
+    const items = response.data.calendar_items || [];
+    const hebrewDate = items.find(item => item.title && item.title.en === 'Hebrew Date');
+    
+    if (hebrewDate && hebrewDate.displayValue && hebrewDate.displayValue.he) {
+      return hebrewDate.displayValue.he;
+    } else {
+      // Fallback: get current date and convert to Hebrew
+      const today = new Date();
+      const hebrewMonths = [
+        'תשרי', 'חשוון', 'כסלו', 'טבת', 'שבט', 'אדר',
+        'ניסן', 'אייר', 'סיוון', 'תמוז', 'אב', 'אלול'
+      ];
+      
+      // Simple Hebrew date conversion (this is a basic implementation)
+      const hebrewYear = today.getFullYear() - 3760; // Approximate Hebrew year
+      const hebrewMonth = hebrewMonths[today.getMonth()];
+      const hebrewDay = today.getDate();
+      
+      return `${hebrewDay} ${hebrewMonth} ${hebrewYear}`;
+    }
+  } catch (err) {
+    console.error('Error fetching Hebrew date:', err.message);
+    // Fallback to basic Hebrew date
+    const today = new Date();
+    const hebrewMonths = [
+      'תשרי', 'חשוון', 'כסלו', 'טבת', 'שבט', 'אדר',
+      'ניסן', 'אייר', 'סיוון', 'תמוז', 'אב', 'אלול'
+    ];
+    const hebrewYear = today.getFullYear() - 3760;
+    const hebrewMonth = hebrewMonths[today.getMonth()];
+    const hebrewDay = today.getDate();
+    
+    return `${hebrewDay} ${hebrewMonth} ${hebrewYear}`;
+  }
+}
+
 // Track processed messages to avoid duplicates
 const processedMessages = new Set();
 
@@ -275,7 +315,7 @@ app.post('/', async (req, res) => {
   if (from && text) {
     let reply;
     if (text.trim().toLowerCase() === '/help') {
-      reply = 'Welcome to the Daily Halacha WhatsApp bot!\nSend /help to see this message.\nSend /daf for today\'s Daf Yomi.';
+      reply = 'Welcome to the Daily Halacha WhatsApp bot!\n\nAvailable commands:\n/help - Show this message\n/daf - Today\'s Daf Yomi\n/date - Today\'s Hebrew date';
     } else if (text.trim().toLowerCase() === '/daf') {
       try {
         const sefariaRes = await axiosInstance.get('https://www.sefaria.org.il/api/calendars');
@@ -291,6 +331,14 @@ app.post('/', async (req, res) => {
       } catch (err) {
         console.error('Error fetching Daf Yomi:', err.message);
         reply = 'שגיאה בשליפת הדף היומי.';
+      }
+    } else if (text.trim().toLowerCase() === '/date') {
+      try {
+        const hebrewDate = await getHebrewDate();
+        reply = `התאריך היומי: ${hebrewDate}`;
+      } catch (err) {
+        console.error('Error fetching Hebrew date:', err.message);
+        reply = 'שגיאה בשליפת התאריך היומי.';
       }
     } else {
       reply = "Sorry, I didn't understand that. Send /help for options.";
