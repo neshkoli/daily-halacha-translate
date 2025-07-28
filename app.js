@@ -112,6 +112,13 @@ async function generateSpeech(text, prompt) {
 // Track processed messages to avoid duplicates
 const processedMessages = new Set();
 
+// Clean up old messages every hour to prevent memory leaks
+setInterval(() => {
+  const oldSize = processedMessages.size;
+  processedMessages.clear();
+  console.log(`Cleaned up ${oldSize} processed message IDs`);
+}, 60 * 60 * 1000); // Clean up every hour
+
 // Route for GET requests (webhook verification)
 app.get('/', (req, res) => {
   const { 'hub.mode': mode, 'hub.challenge': challenge, 'hub.verify_token': token } = req.query;
@@ -138,19 +145,34 @@ app.post('/', async (req, res) => {
   const text = message && message.text && message.text.body;
   const audioMessage = message && message.type === 'audio' && message.audio;
 
+  // Early duplicate detection - check immediately after parsing
+  let messageId = null;
+  if (audioMessage) {
+    messageId = audioMessage.id;
+    console.log('Processing audio message with ID:', messageId);
+  } else if (text) {
+    // For text messages, create a unique ID based on content and sender
+    // Use a 5-minute window to allow for retries but prevent immediate duplicates
+    const timeWindow = Math.floor(Date.now() / (5 * 60 * 1000)); // 5-minute windows
+    messageId = `${from}-${text.trim()}-${timeWindow}`;
+    console.log('Processing text message with ID:', messageId);
+  }
+
+  // Check if we've already processed this message
+  if (messageId && processedMessages.has(messageId)) {
+    console.log('Message already processed, skipping:', messageId);
+    res.status(200).end();
+    return;
+  }
+
+  // Mark message as processed immediately
+  if (messageId) {
+    processedMessages.add(messageId);
+    console.log('Marked message as processed:', messageId);
+  }
+
   // Handle audio messages
   if (from && audioMessage) {
-    const messageId = audioMessage.id;
-    
-    // Check if we've already processed this message
-    if (processedMessages.has(messageId)) {
-      console.log('Message already processed, skipping:', messageId);
-      res.status(200).end();
-      return;
-    }
-    
-    // Mark message as processed
-    processedMessages.add(messageId);
     
     try {
       // Send immediate response that processing has started
