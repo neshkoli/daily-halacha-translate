@@ -1,6 +1,21 @@
-# Migration Guide: Render.com to Google Cloud Run
+# Migration Guide: Render.com to Google Cloud Run (Free Tier Optimized)
 
-This guide will help you migrate your WhatsApp bot from Render.com to Google Cloud Run.
+This guide will help you migrate your WhatsApp bot from Render.com to Google Cloud Run while staying within the free tier and minimizing costs.
+
+## 🆓 Google Cloud Run Free Tier Limits
+
+**Monthly Free Tier Includes:**
+- **2 million requests** per month
+- **360,000 vCPU-seconds** per month
+- **180,000 GiB-seconds** per month
+- **1 GB network egress** per month
+
+**Our Configuration:**
+- **Memory**: 256Mi (free tier limit)
+- **CPU**: 0.5 vCPU (free tier limit)
+- **Min instances**: 0 (scale to zero for cost savings)
+- **Max instances**: 2 (free tier limit)
+- **Timeout**: 60s (optimized for free tier)
 
 ## Prerequisites
 
@@ -31,7 +46,7 @@ gcloud projects create daily-halacha-translate --name="Daily Halacha Translate"
 gcloud config set project daily-halacha-translate
 ```
 
-3. **Enable required APIs**:
+3. **Enable required APIs** (all free):
 ```bash
 gcloud services enable cloudbuild.googleapis.com
 gcloud services enable run.googleapis.com
@@ -64,11 +79,10 @@ gcloud run services update daily-halacha-translate \
   --set-env-vars VERIFY_TOKEN=your_verify_token \
   --set-env-vars WHATSAPP_TOKEN=your_whatsapp_token \
   --set-env-vars WHATSAPP_PHONE_NUMBER_ID=your_phone_number_id \
-  --set-env-vars GEMINI_API_KEY=your_gemini_api_key \
-  --set-env-vars PORT=8080
+  --set-env-vars GEMINI_API_KEY=your_gemini_api_key
 ```
 
-## Step 4: Deploy to Google Cloud Run
+## Step 4: Deploy to Google Cloud Run (Free Tier Optimized)
 
 ### Option A: Using the deployment script (Recommended)
 1. **Update the PROJECT_ID** in `deploy.sh`:
@@ -90,17 +104,19 @@ PROJECT_ID="daily-halacha-translate"
 docker build -t gcr.io/daily-halacha-translate/daily-halacha-translate .
 docker push gcr.io/daily-halacha-translate/daily-halacha-translate
 
-# Deploy to Cloud Run
+# Deploy to Cloud Run (Free Tier Optimized)
 gcloud run deploy daily-halacha-translate \
   --image gcr.io/daily-halacha-translate/daily-halacha-translate \
   --region us-central1 \
   --platform managed \
   --allow-unauthenticated \
   --port 8080 \
-  --memory 512Mi \
-  --cpu 1 \
-  --max-instances 10 \
-  --timeout 300s
+  --memory 256Mi \
+  --cpu 0.5 \
+  --min-instances 0 \
+  --max-instances 2 \
+  --timeout 60s \
+  --concurrency 80
 ```
 
 ## Step 5: Update WhatsApp Webhook URL
@@ -152,14 +168,43 @@ Once you've confirmed everything is working on Google Cloud Run:
 
 ## Configuration Comparison
 
-| Feature | Render.com | Google Cloud Run |
-|---------|------------|------------------|
+| Feature | Render.com | Google Cloud Run (Free) |
+|---------|------------|-------------------------|
 | **Port** | `process.env.PORT` | `process.env.PORT` (8080) |
-| **Memory** | 512MB | 512Mi |
-| **CPU** | 0.5 vCPU | 1 vCPU |
-| **Timeout** | 30s | 300s |
-| **Scaling** | Auto | Auto (0-10 instances) |
-| **Cost** | $7/month | Pay per use (~$5-15/month) |
+| **Memory** | 512MB | 256Mi (free tier) |
+| **CPU** | 0.5 vCPU | 0.5 vCPU (free tier) |
+| **Timeout** | 30s | 60s |
+| **Scaling** | Auto | Auto (0-2 instances) |
+| **Cost** | $7/month | **FREE** (within limits) |
+| **Requests** | Unlimited | 2M/month free |
+
+## 💰 Cost Optimization Strategies
+
+### 1. **Stay Within Free Tier**
+- **Memory**: 256Mi (free tier limit)
+- **CPU**: 0.5 vCPU (free tier limit)
+- **Max instances**: 2 (free tier limit)
+- **Scale to zero**: Enabled (no cost when idle)
+
+### 2. **Monitor Usage**
+```bash
+# Check your current usage
+gcloud billing accounts list
+gcloud billing accounts describe ACCOUNT_ID
+
+# Set up billing alerts
+# Go to Google Cloud Console → Billing → Budgets & Alerts
+```
+
+### 3. **Optimize for WhatsApp Usage**
+- **Concurrency**: 80 requests per instance (optimized for WhatsApp)
+- **Timeout**: 60s (sufficient for audio processing)
+- **Memory**: 256Mi (adequate for your workload)
+
+### 4. **Free Tier Limits for Your Use Case**
+- **2M requests/month**: ~66K requests/day (plenty for WhatsApp bot)
+- **360K vCPU-seconds**: ~10 hours/day of continuous usage
+- **180K GiB-seconds**: ~20 hours/day of memory usage
 
 ## Troubleshooting
 
@@ -188,6 +233,19 @@ gcloud run services logs read daily-halacha-translate --region us-central1
 gcloud run services describe daily-halacha-translate --region us-central1
 ```
 
+5. **Out of free tier**:
+```bash
+# Check usage
+gcloud billing accounts describe ACCOUNT_ID
+
+# Consider upgrading to paid tier if needed
+gcloud run services update daily-halacha-translate \
+  --region us-central1 \
+  --memory 512Mi \
+  --cpu 1 \
+  --max-instances 10
+```
+
 ### Useful Commands:
 
 ```bash
@@ -200,26 +258,32 @@ gcloud run services logs read daily-halacha-translate --region us-central1
 # Update environment variables
 gcloud run services update daily-halacha-translate --region us-central1 --set-env-vars KEY=value
 
-# Scale the service
-gcloud run services update daily-halacha-translate --region us-central1 --max-instances 20
+# Check billing
+gcloud billing accounts list
+gcloud billing accounts describe ACCOUNT_ID
+
+# Monitor usage
+gcloud run services describe daily-halacha-translate --region us-central1 --format="value(status.url)"
 ```
 
-## Cost Optimization
+## 🚨 Important Free Tier Notes
 
-1. **Set minimum instances to 0** for cost savings
-2. **Use appropriate memory/CPU** for your workload
-3. **Monitor usage** in Google Cloud Console
-4. **Set up billing alerts** to avoid surprises
+1. **Billing Account Required**: Even for free tier, you need a billing account
+2. **Usage Monitoring**: Set up billing alerts to avoid surprises
+3. **Scale to Zero**: Your service will scale to zero when not in use (no cost)
+4. **Cold Starts**: First request after idle period may be slower
+5. **Network Egress**: 1GB free per month (sufficient for WhatsApp webhooks)
 
 ## Security Best Practices
 
-1. **Use Secret Manager** for sensitive environment variables
-2. **Enable Cloud Audit Logs** for monitoring
+1. **Use Secret Manager** for sensitive environment variables (free tier available)
+2. **Enable Cloud Audit Logs** for monitoring (free)
 3. **Set up proper IAM roles** for team members
 4. **Use VPC Connector** if needed for private networking
 
 ## Support
 
 - **Google Cloud Documentation**: https://cloud.google.com/run/docs
+- **Free Tier Documentation**: https://cloud.google.com/free/docs
 - **Google Cloud Support**: Available with billing account
 - **Community**: Stack Overflow with `google-cloud-run` tag 

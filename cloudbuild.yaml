@@ -7,7 +7,7 @@ steps:
   - name: 'gcr.io/cloud-builders/docker'
     args: ['push', 'gcr.io/$PROJECT_ID/daily-halacha-translate']
   
-  # Deploy container image to Cloud Run
+  # Deploy container image to Cloud Run (Free Tier Optimized)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     args:
@@ -24,13 +24,17 @@ steps:
       - '--port'
       - '8080'
       - '--memory'
-      - '512Mi'
+      - '256Mi'
       - '--cpu'
-      - '1'
+      - '0.5'
+      - '--min-instances'
+      - '0'
       - '--max-instances'
-      - '10'
+      - '2'
       - '--timeout'
-      - '300s'
+      - '60s'
+      - '--concurrency'
+      - '80'
 
 images:
   - 'gcr.io/$PROJECT_ID/daily-halacha-translate' 

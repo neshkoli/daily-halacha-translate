@@ -112,12 +112,16 @@ async function generateSpeech(text, prompt) {
 // Track processed messages to avoid duplicates
 const processedMessages = new Set();
 
-// Clean up old messages every hour to prevent memory leaks
+// Clean up old messages every 30 minutes to prevent memory leaks (optimized for free tier)
 setInterval(() => {
   const oldSize = processedMessages.size;
   processedMessages.clear();
   console.log(`Cleaned up ${oldSize} processed message IDs`);
-}, 60 * 60 * 1000); // Clean up every hour
+  
+  // Log memory usage for monitoring
+  const memUsage = process.memoryUsage();
+  console.log(`Memory usage: ${Math.round(memUsage.heapUsed / 1024 / 1024)}MB used, ${Math.round(memUsage.heapTotal / 1024 / 1024)}MB total`);
+}, 30 * 60 * 1000); // Clean up every 30 minutes
 
 // Route for GET requests (webhook verification)
 app.get('/', (req, res) => {
