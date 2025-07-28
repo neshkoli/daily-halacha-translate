@@ -174,4 +174,4 @@ gcloud run services update daily-halacha-translate --region us-central1 --set-en
 
 ## License
 
-This project is licensed under the MIT License. 
+This project is licensed under the MIT License. # Test deployment - Mon Jul 28 22:30:11 IDT 2025
