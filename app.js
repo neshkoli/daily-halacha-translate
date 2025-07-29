@@ -112,40 +112,40 @@ async function generateSpeech(text, prompt) {
 // Function to get Hebrew date
 async function getHebrewDate() {
   try {
-    const response = await axiosInstance.get('https://www.sefaria.org.il/api/calendars');
-    const items = response.data.calendar_items || [];
-    const hebrewDate = items.find(item => item.title && item.title.en === 'Hebrew Date');
+    // Use hebcal API for accurate Hebrew date
+    const response = await axiosInstance.get('https://www.hebcal.com/converter', {
+      params: {
+        cfg: 'json',
+        date: new Date().toISOString().split('T')[0],
+        g2h: 1
+      }
+    });
     
-    if (hebrewDate && hebrewDate.displayValue && hebrewDate.displayValue.he) {
-      return hebrewDate.displayValue.he;
+    if (response.data && response.data.hebrew) {
+      return response.data.hebrew;
     } else {
-      // Fallback: get current date and convert to Hebrew
-      const today = new Date();
-      const hebrewMonths = [
-        'תשרי', 'חשוון', 'כסלו', 'טבת', 'שבט', 'אדר',
-        'ניסן', 'אייר', 'סיוון', 'תמוז', 'אב', 'אלול'
-      ];
-      
-      // Simple Hebrew date conversion (this is a basic implementation)
-      const hebrewYear = today.getFullYear() - 3760; // Approximate Hebrew year
-      const hebrewMonth = hebrewMonths[today.getMonth()];
-      const hebrewDay = today.getDate();
-      
-      return `${hebrewDay} ${hebrewMonth} ${hebrewYear}`;
+      throw new Error('No Hebrew date data received from hebcal API');
     }
   } catch (err) {
-    console.error('Error fetching Hebrew date:', err.message);
-    // Fallback to basic Hebrew date
-    const today = new Date();
-    const hebrewMonths = [
-      'תשרי', 'חשוון', 'כסלו', 'טבת', 'שבט', 'אדר',
-      'ניסן', 'אייר', 'סיוון', 'תמוז', 'אב', 'אלול'
-    ];
-    const hebrewYear = today.getFullYear() - 3760;
-    const hebrewMonth = hebrewMonths[today.getMonth()];
-    const hebrewDay = today.getDate();
+    console.error('Error fetching Hebrew date from hebcal:', err.message);
     
-    return `${hebrewDay} ${hebrewMonth} ${hebrewYear}`;
+    // Fallback: try Sefaria Tanya Yomi (day and month only)
+    try {
+      const sefariaResponse = await axiosInstance.get('https://www.sefaria.org.il/api/calendars');
+      const items = sefariaResponse.data.calendar_items || [];
+      const tanyaYomi = items.find(item => item.title && item.title.en === 'Tanya Yomi');
+      
+      if (tanyaYomi && tanyaYomi.displayValue && tanyaYomi.displayValue.he) {
+        // Add current Hebrew year to Tanya Yomi date
+        const currentYear = new Date().getFullYear() - 3760; // Approximate Hebrew year
+        return `${tanyaYomi.displayValue.he} תשפ״ה`;
+      }
+    } catch (sefariaErr) {
+      console.error('Error fetching from Sefaria fallback:', sefariaErr.message);
+    }
+    
+    // Final fallback: return error message
+    return 'לא ניתן לקבל תאריך עברי';
   }
 }
 
