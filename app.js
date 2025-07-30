@@ -289,12 +289,25 @@ app.post('/', async (req, res) => {
     } catch (err) {
       console.error('Error processing audio message:', err.message);
       try {
+        // Create a user-friendly error message
+        let errorMessage = 'Sorry, there was an error processing your audio message.';
+        
+        // If it's a Gemini API error, provide more specific information
+        if (err.message && err.message.includes('model is overloaded')) {
+          errorMessage = 'The AI service is currently busy. Please try again in a few minutes.';
+        } else if (err.message && err.message.includes('UNAVAILABLE')) {
+          errorMessage = 'The AI service is temporarily unavailable. Please try again later.';
+        } else if (err.message) {
+          // Include the actual error message for debugging
+          errorMessage = `Error: ${err.message}`;
+        }
+        
         await axiosInstance.post(
           `https://graph.facebook.com/v23.0/${whatsappPhoneNumberId}/messages`,
           {
             messaging_product: 'whatsapp',
             to: from,
-            text: { body: 'Sorry, there was an error processing your audio message.' }
+            text: { body: errorMessage }
           },
           {
             headers: {
