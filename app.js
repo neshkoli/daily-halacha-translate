@@ -7,6 +7,7 @@ const path = require('path');
 const ffmpeg = require('fluent-ffmpeg');
 const { GoogleGenAI } = require('@google/genai');
 const wav = require('wav');
+const { Storage } = require('@google-cloud/storage');
 
 // Configure axios for SSL issues
 const https = require('https');
@@ -16,6 +17,31 @@ const axiosInstance = axios.create({
   }),
   timeout: 30000
 });
+
+// Initialize Google Cloud Storage
+const storage = new Storage();
+const bucketName = 'daily-halacha-audio-files';
+const bucket = storage.bucket(bucketName);
+
+// Function to ensure bucket exists
+async function ensureBucketExists() {
+  try {
+    const [exists] = await bucket.exists();
+    if (!exists) {
+      console.log(`📦 Creating bucket: ${bucketName}`);
+      await bucket.create({
+        location: 'US-CENTRAL1',
+        public: true
+      });
+      console.log(`✅ Bucket created: ${bucketName}`);
+    } else {
+      console.log(`✅ Bucket exists: ${bucketName}`);
+    }
+  } catch (error) {
+    console.error('❌ Error ensuring bucket exists:', error.message);
+    // Don't throw - the app can still work without storage
+  }
+}
 
 // Create an Express app
 const app = express();
@@ -32,6 +58,45 @@ const geminiApiKey = process.env.GEMINI_API_KEY;
 
 // Initialize Google GenAI
 const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+
+// Function to save audio file to Google Cloud Storage
+async function saveAudioToStorage(audioBuffer, originalFormat = 'opus') {
+  try {
+    // Create date-based filename
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 19).replace(/:/g, '-').replace('T', '_');
+    const fileName = `audio_${dateStr}.${originalFormat}`;
+    
+    console.log(`📁 Saving audio file: ${fileName}`);
+    
+    // Create file in bucket
+    const file = bucket.file(fileName);
+    
+    // Upload the audio buffer
+    await file.save(audioBuffer, {
+      metadata: {
+        contentType: `audio/${originalFormat}`,
+        metadata: {
+          uploadedAt: now.toISOString(),
+          source: 'whatsapp-bot'
+        }
+      }
+    });
+    
+    // Make the file publicly accessible
+    await file.makePublic();
+    
+    // Get the public URL
+    const publicUrl = `https://storage.googleapis.com/${bucketName}/${fileName}`;
+    
+    console.log(`✅ Audio file saved successfully: ${publicUrl}`);
+    return publicUrl;
+    
+  } catch (error) {
+    console.error('❌ Error saving audio to storage:', error.message);
+    throw error;
+  }
+}
 
 // Helper function to save WAV file
 async function saveWaveFile(filename, pcmData, channels = 1, rate = 24000, sampleWidth = 2) {
@@ -249,6 +314,16 @@ app.post('/', async (req, res) => {
         responseType: 'arraybuffer'
       });
       const audioBuffer = Buffer.from(audioRes.data, 'binary');
+
+      // Save audio file to Google Cloud Storage
+      let audioFileUrl = null;
+      try {
+        audioFileUrl = await saveAudioToStorage(audioBuffer, 'opus');
+        console.log(`📁 Audio file URL: ${audioFileUrl}`);
+      } catch (storageError) {
+        console.error('Warning: Failed to save audio to storage:', storageError.message);
+        // Continue processing even if storage fails
+      }
 
       // Read prompt for voice instructions
       const promptPath = path.join(__dirname, 'prompt.txt');
@@ -513,6 +588,9 @@ if (process.argv.includes('--tts-only')) {
 }
 
 // Start the server
-app.listen(port, () => {
+app.listen(port, async () => {
   console.log(`\nListening on port ${port}\n`);
+  
+  // Initialize Google Cloud Storage bucket
+  await ensureBucketExists();
 });
