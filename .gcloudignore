@@ -80,7 +80,6 @@ docs/
 .gitignore
 
 # Docker
-Dockerfile
 .dockerignore
 
 # Deployment scripts

@@ -27,10 +27,17 @@ fi
 echo "📋 Setting project to $PROJECT_ID..."
 gcloud config set project $PROJECT_ID
 
-# Deploy to Cloud Run using Cloud Buildpacks (no local Docker build needed)
-echo "🚀 Deploying to Cloud Run using Cloud Buildpacks..."
+# Build and push Docker image
+echo "🔨 Building Docker image..."
+docker build -t gcr.io/$PROJECT_ID/$SERVICE_NAME:latest .
+
+echo "📤 Pushing Docker image..."
+docker push gcr.io/$PROJECT_ID/$SERVICE_NAME:latest
+
+# Deploy to Cloud Run using Docker image
+echo "🚀 Deploying to Cloud Run using Docker image..."
 gcloud run deploy $SERVICE_NAME \
-    --source . \
+    --image gcr.io/$PROJECT_ID/$SERVICE_NAME:latest \
     --region $REGION \
     --platform managed \
     --allow-unauthenticated \
