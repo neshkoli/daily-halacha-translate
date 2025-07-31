@@ -72,16 +72,27 @@ fi
 echo "🎵 Cleaning old audio files..."
 AUDIO_BUCKET="gs://daily-halacha-audio-files"
 if gsutil ls $AUDIO_BUCKET >/dev/null 2>&1; then
-    # Get files older than 7 days
+    # Get files older than 7 days from both source-audio and tts-audio folders
     SEVEN_DAYS_AGO=$(date -d '7 days ago' +%Y-%m-%d)
-    OLD_AUDIO_FILES=$(gsutil ls -l $AUDIO_BUCKET/*.mp3 2>/dev/null | awk -v cutoff="$SEVEN_DAYS_AGO" '$2 < cutoff {print $3}' || echo "")
     
-    if [ ! -z "$OLD_AUDIO_FILES" ]; then
-        echo "🗑️  Removing audio files older than 7 days..."
-        echo "$OLD_AUDIO_FILES" | xargs -I {} gsutil rm {}
-        echo "✅ Removed $(echo "$OLD_AUDIO_FILES" | wc -l) old audio files"
+    # Clean source-audio folder
+    OLD_SOURCE_FILES=$(gsutil ls -l $AUDIO_BUCKET/source-audio/*.mp3 2>/dev/null | awk -v cutoff="$SEVEN_DAYS_AGO" '$2 < cutoff {print $3}' || echo "")
+    if [ ! -z "$OLD_SOURCE_FILES" ]; then
+        echo "🗑️  Removing source audio files older than 7 days..."
+        echo "$OLD_SOURCE_FILES" | xargs -I {} gsutil rm {}
+        echo "✅ Removed $(echo "$OLD_SOURCE_FILES" | wc -l) old source audio files"
     else
-        echo "✅ No old audio files to remove"
+        echo "✅ No old source audio files to remove"
+    fi
+    
+    # Clean tts-audio folder
+    OLD_TTS_FILES=$(gsutil ls -l $AUDIO_BUCKET/tts-audio/*.mp3 2>/dev/null | awk -v cutoff="$SEVEN_DAYS_AGO" '$2 < cutoff {print $3}' || echo "")
+    if [ ! -z "$OLD_TTS_FILES" ]; then
+        echo "🗑️  Removing TTS audio files older than 7 days..."
+        echo "$OLD_TTS_FILES" | xargs -I {} gsutil rm {}
+        echo "✅ Removed $(echo "$OLD_TTS_FILES" | wc -l) old TTS audio files"
+    else
+        echo "✅ No old TTS audio files to remove"
     fi
 else
     echo "ℹ️  Audio bucket not found"
@@ -93,4 +104,5 @@ echo "📊 Summary of remaining artifacts:"
 echo "   - Cloud Build source files: $(gsutil ls gs://${PROJECT_ID}_cloudbuild/source/ 2>/dev/null | wc -l)"
 echo "   - Cloud Run source files: $(gsutil ls gs://run-sources-${SERVICE_NAME}-${REGION}/services/${SERVICE_NAME}/ 2>/dev/null | wc -l)"
 echo "   - Docker images: $(gcloud container images list-tags gcr.io/${PROJECT_ID}/${SERVICE_NAME} --format='value(digest)' 2>/dev/null | wc -l)"
-echo "   - Audio files: $(gsutil ls gs://daily-halacha-audio-files/*.mp3 2>/dev/null | wc -l)" 
+echo "   - Source audio files: $(gsutil ls gs://daily-halacha-audio-files/source-audio/*.mp3 2>/dev/null | wc -l)"
+echo "   - TTS audio files: $(gsutil ls gs://daily-halacha-audio-files/tts-audio/*.mp3 2>/dev/null | wc -l)" 
