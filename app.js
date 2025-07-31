@@ -65,20 +65,54 @@ async function saveAudioToStorage(audioBuffer, originalFormat = 'opus') {
     // Create date-based filename
     const now = new Date();
     const dateStr = now.toISOString().slice(0, 19).replace(/:/g, '-').replace('T', '_');
-    const fileName = `audio_${dateStr}.${originalFormat}`;
+    const fileName = `audio_${dateStr}.mp3`;
     
-    console.log(`📁 Saving audio file: ${fileName}`);
+    console.log(`📁 Converting and saving audio file: ${fileName}`);
+    
+    // Convert audio to MP3 using ffmpeg
+    const mp3Buffer = await new Promise((resolve, reject) => {
+      const chunks = [];
+      
+      ffmpeg()
+        .input(audioBuffer)
+        .inputFormat(originalFormat)
+        .audioCodec('libmp3lame')
+        .audioChannels(1) // Mono
+        .audioBitrate(64) // Small size - 64kbps
+        .audioFrequency(22050) // Lower frequency for smaller size
+        .toFormat('mp3')
+        .on('error', (err) => {
+          console.error('FFmpeg conversion error:', err.message);
+          reject(err);
+        })
+        .on('end', () => {
+          console.log('✅ Audio converted to MP3 successfully');
+        })
+        .pipe()
+        .on('data', (chunk) => {
+          chunks.push(chunk);
+        })
+        .on('end', () => {
+          const buffer = Buffer.concat(chunks);
+          resolve(buffer);
+        });
+    });
     
     // Create file in bucket
     const file = bucket.file(fileName);
     
-    // Upload the audio buffer
-    await file.save(audioBuffer, {
+    // Upload the MP3 buffer
+    await file.save(mp3Buffer, {
       metadata: {
-        contentType: `audio/${originalFormat}`,
+        contentType: 'audio/mpeg',
         metadata: {
           uploadedAt: now.toISOString(),
-          source: 'whatsapp-bot'
+          source: 'whatsapp-bot',
+          originalFormat: originalFormat,
+          convertedTo: 'mp3',
+          audioChannels: '1',
+          audioBitrate: '64kbps',
+          audioFrequency: '22050Hz'
         }
       }
     });
@@ -90,6 +124,7 @@ async function saveAudioToStorage(audioBuffer, originalFormat = 'opus') {
     const publicUrl = `https://storage.googleapis.com/${bucketName}/${fileName}`;
     
     console.log(`✅ Audio file saved successfully: ${publicUrl}`);
+    console.log(`📊 File size: ${(mp3Buffer.length / 1024).toFixed(2)} KB`);
     return publicUrl;
     
   } catch (error) {
