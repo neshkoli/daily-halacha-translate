@@ -151,18 +151,19 @@ async function saveTTSAudioToStorage(audioBuffer, fileName) {
   try {
     console.log(`🎤 Converting and saving TTS audio file: ${fileName}`);
     
-    // Convert WAV to MP3 using ffmpeg with temporary file
-    const mp3Buffer = await new Promise((resolve, reject) => {
-      const chunks = [];
+    // First, save the raw PCM data as a proper WAV file
+    const tempWavFile = `/tmp/temp_tts_${Date.now()}.wav`;
+    
+    try {
+      // Save raw PCM data as proper WAV file
+      await saveWaveFile(tempWavFile, audioBuffer, 1, 24000, 2);
+      console.log(`📁 Created proper WAV file: ${tempWavFile}`);
       
-      // Create temporary input file
-      const tempInputFile = `/tmp/temp_tts_${Date.now()}.wav`;
-      
-      try {
-        // Write audio buffer to temporary file
-        fs.writeFileSync(tempInputFile, audioBuffer);
+      // Convert WAV to MP3 using ffmpeg
+      const mp3Buffer = await new Promise((resolve, reject) => {
+        const chunks = [];
         
-        ffmpeg(tempInputFile)
+        ffmpeg(tempWavFile)
           .audioCodec('libmp3lame')
           .audioChannels(1) // Mono
           .audioBitrate(128) // Higher quality for TTS
@@ -171,13 +172,13 @@ async function saveTTSAudioToStorage(audioBuffer, fileName) {
           .on('error', (err) => {
             console.error('FFmpeg TTS conversion error:', err.message);
             // Clean up temp file
-            try { fs.unlinkSync(tempInputFile); } catch (e) {}
+            try { fs.unlinkSync(tempWavFile); } catch (e) {}
             reject(err);
           })
           .on('end', () => {
             console.log('✅ TTS audio converted to MP3 successfully');
             // Clean up temp input file
-            try { fs.unlinkSync(tempInputFile); } catch (e) {}
+            try { fs.unlinkSync(tempWavFile); } catch (e) {}
           })
           .pipe()
           .on('data', (chunk) => {
@@ -187,37 +188,39 @@ async function saveTTSAudioToStorage(audioBuffer, fileName) {
             const buffer = Buffer.concat(chunks);
             resolve(buffer);
           });
-      } catch (writeError) {
-        console.error('Error writing TTS temp file:', writeError.message);
-        reject(writeError);
-      }
-    });
-    
-    // Save to Google Cloud Storage in tts-audio folder
-    const file = bucket.file(`tts-audio/${fileName}`);
-    await file.save(mp3Buffer, {
-      metadata: {
-        contentType: 'audio/mpeg',
+      });
+      
+      // Save to Google Cloud Storage in english folder
+      const file = bucket.file(`english/${fileName}`);
+      await file.save(mp3Buffer, {
         metadata: {
-          originalFormat: 'wav',
-          convertedTo: 'mp3',
-          channels: '1',
-          bitrate: '128kbps',
-          frequency: '24000Hz',
-          conversionDate: new Date().toISOString(),
-          type: 'tts-audio'
+          contentType: 'audio/mpeg',
+          metadata: {
+            originalFormat: 'wav',
+            convertedTo: 'mp3',
+            channels: '1',
+            bitrate: '128kbps',
+            frequency: '24000Hz',
+            conversionDate: new Date().toISOString(),
+            type: 'english-audio'
+          }
         }
-      }
-    });
+      });
 
-    // Make the file publicly accessible
-    await file.makePublic();
-    
-    const publicUrl = `https://storage.googleapis.com/${bucketName}/${file.name}`;
-    console.log(`✅ TTS audio file saved successfully: ${publicUrl}`);
-    console.log(`📊 File size: ${(mp3Buffer.length / 1024).toFixed(2)} KB`);
-    
-    return publicUrl;
+      // Make the file publicly accessible
+      await file.makePublic();
+      
+      const publicUrl = `https://storage.googleapis.com/${bucketName}/${file.name}`;
+      console.log(`✅ English audio file saved successfully: ${publicUrl}`);
+      console.log(`📊 File size: ${(mp3Buffer.length / 1024).toFixed(2)} KB`);
+      
+      return publicUrl;
+    } catch (error) {
+      console.error('❌ Error in TTS audio processing:', error.message);
+      // Clean up temp file if it exists
+      try { fs.unlinkSync(tempWavFile); } catch (e) {}
+      throw error;
+    }
   } catch (err) {
     console.error('❌ Error saving TTS audio to storage:', err.message);
     throw err;
@@ -489,7 +492,7 @@ app.post('/', async (req, res) => {
       console.log('Transcription, translation, and TTS completed...');
       
       // Send both the translation text and TTS audio
-      const messageBody = `🎤 Translation: ${englishText}\n\n📁 Source Audio: ${sourceAudioFileUrl || 'Not available'}\n🎵 TTS Audio: ${ttsAudioFileUrl || 'Not available'}`;
+      const messageBody = `🎤 Translation: ${englishText}\n\n📁 Source Audio: ${sourceAudioFileUrl || 'Not available'}\n🎵 English Audio: ${ttsAudioFileUrl || 'Not available'}`;
       
       await axiosInstance.post(
         `https://graph.facebook.com/v23.0/${whatsappPhoneNumberId}/messages`,

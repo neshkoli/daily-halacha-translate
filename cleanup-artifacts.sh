@@ -85,14 +85,14 @@ if gsutil ls $AUDIO_BUCKET >/dev/null 2>&1; then
         echo "✅ No old source audio files to remove"
     fi
     
-    # Clean tts-audio folder
-    OLD_TTS_FILES=$(gsutil ls -l $AUDIO_BUCKET/tts-audio/*.mp3 2>/dev/null | awk -v cutoff="$SEVEN_DAYS_AGO" '$2 < cutoff {print $3}' || echo "")
-    if [ ! -z "$OLD_TTS_FILES" ]; then
-        echo "🗑️  Removing TTS audio files older than 7 days..."
-        echo "$OLD_TTS_FILES" | xargs -I {} gsutil rm {}
-        echo "✅ Removed $(echo "$OLD_TTS_FILES" | wc -l) old TTS audio files"
+    # Clean english folder
+    OLD_ENGLISH_FILES=$(gsutil ls -l $AUDIO_BUCKET/english/*.mp3 2>/dev/null | awk -v cutoff="$SEVEN_DAYS_AGO" '$2 < cutoff {print $3}' || echo "")
+    if [ ! -z "$OLD_ENGLISH_FILES" ]; then
+        echo "🗑️  Removing English audio files older than 7 days..."
+        echo "$OLD_ENGLISH_FILES" | xargs -I {} gsutil rm {}
+        echo "✅ Removed $(echo "$OLD_ENGLISH_FILES" | wc -l) old English audio files"
     else
-        echo "✅ No old TTS audio files to remove"
+        echo "✅ No old English audio files to remove"
     fi
 else
     echo "ℹ️  Audio bucket not found"
@@ -105,4 +105,4 @@ echo "   - Cloud Build source files: $(gsutil ls gs://${PROJECT_ID}_cloudbuild/s
 echo "   - Cloud Run source files: $(gsutil ls gs://run-sources-${SERVICE_NAME}-${REGION}/services/${SERVICE_NAME}/ 2>/dev/null | wc -l)"
 echo "   - Docker images: $(gcloud container images list-tags gcr.io/${PROJECT_ID}/${SERVICE_NAME} --format='value(digest)' 2>/dev/null | wc -l)"
 echo "   - Source audio files: $(gsutil ls gs://daily-halacha-audio-files/source-audio/*.mp3 2>/dev/null | wc -l)"
-echo "   - TTS audio files: $(gsutil ls gs://daily-halacha-audio-files/tts-audio/*.mp3 2>/dev/null | wc -l)" 
+echo "   - English audio files: $(gsutil ls gs://daily-halacha-audio-files/english/*.mp3 2>/dev/null | wc -l)" 
