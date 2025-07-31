@@ -76,7 +76,7 @@ if gsutil ls $AUDIO_BUCKET >/dev/null 2>&1; then
     SEVEN_DAYS_AGO=$(date -d '7 days ago' +%Y-%m-%d)
     
     # Clean source-audio folder
-    OLD_SOURCE_FILES=$(gsutil ls -l $AUDIO_BUCKET/source-audio/*.mp3 2>/dev/null | awk -v cutoff="$SEVEN_DAYS_AGO" '$2 < cutoff {print $3}' || echo "")
+    OLD_SOURCE_FILES=$(gsutil ls -l $AUDIO_BUCKET/source-audio/*.mp3 2>/dev/null | awk -v cutoff="$SEVEN_DAYS_AGO" '$2 < cutoff {print $3}' | sed 's|file://|gs://|g' || echo "")
     if [ ! -z "$OLD_SOURCE_FILES" ]; then
         echo "🗑️  Removing source audio files older than 7 days..."
         echo "$OLD_SOURCE_FILES" | xargs -I {} gsutil rm {}
@@ -86,7 +86,7 @@ if gsutil ls $AUDIO_BUCKET >/dev/null 2>&1; then
     fi
     
     # Clean english folder
-    OLD_ENGLISH_FILES=$(gsutil ls -l $AUDIO_BUCKET/english/*.mp3 2>/dev/null | awk -v cutoff="$SEVEN_DAYS_AGO" '$2 < cutoff {print $3}' || echo "")
+    OLD_ENGLISH_FILES=$(gsutil ls -l $AUDIO_BUCKET/english/*.mp3 2>/dev/null | awk -v cutoff="$SEVEN_DAYS_AGO" '$2 < cutoff {print $3}' | sed 's|file://|gs://|g' || echo "")
     if [ ! -z "$OLD_ENGLISH_FILES" ]; then
         echo "🗑️  Removing English audio files older than 7 days..."
         echo "$OLD_ENGLISH_FILES" | xargs -I {} gsutil rm {}

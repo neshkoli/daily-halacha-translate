@@ -60,6 +60,7 @@ jobs:
         gcloud run services describe $SERVICE_NAME --region $REGION --format="value(status.url)"
 
     - name: Clean up old artifacts
+      continue-on-error: true
       run: |
         chmod +x cleanup-artifacts.sh
         ./cleanup-artifacts.sh 
