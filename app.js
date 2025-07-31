@@ -75,7 +75,6 @@ async function saveAudioToStorage(audioBuffer, originalFormat = 'opus') {
       
       // Create temporary input file
       const tempInputFile = `/tmp/temp_audio_${Date.now()}.${originalFormat}`;
-      const tempOutputFile = `/tmp/temp_audio_${Date.now()}.mp3`;
       
       try {
         // Write audio buffer to temporary file
@@ -568,7 +567,7 @@ app.post('/', async (req, res) => {
       console.log('Transcription, translation, and TTS completed...');
       
       // Send the translation text first
-      const messageBody = `🎤 Translation: ${englishText}\n\n📁 Source Audio: ${sourceAudioFileUrl || 'Not available'}`;
+      const messageBody = `🎤 Translation:\n${englishText}`;
       
       await axiosInstance.post(
         `https://graph.facebook.com/v23.0/${whatsappPhoneNumberId}/messages`,
@@ -711,134 +710,7 @@ app.post('/', async (req, res) => {
   res.status(200).end();
 });
 
-// Test functions for local development
-async function testTranscribeAndTranslate() {
-  try {
-    console.log('Testing transcription and translation with sample.opus...');
-    
-    const audioFilePath = path.join(__dirname, 'sample.opus');
-    if (!fs.existsSync(audioFilePath)) {
-      console.error('sample.opus not found');
-      return;
-    }
-    
-    const audioBuffer = fs.readFileSync(audioFilePath);
-    console.log('Audio file loaded, size:', audioBuffer.length, 'bytes');
-    
-    const promptPath = path.join(__dirname, 'prompt.txt');
-    let prompt = '';
-    try {
-      prompt = fs.readFileSync(promptPath, 'utf8');
-    } catch (e) {
-      prompt = 'Please transcribe and translate this Hebrew audio to English.';
-    }
-    
-    if (!geminiApiKey) {
-      console.error('GEMINI_API_KEY environment variable is not set');
-      return;
-    }
-    
-    const englishText = await transcribeAndTranslate(audioBuffer, prompt);
-    console.log('\n=== TRANSLATION RESULT ===');
-    console.log(englishText);
-    console.log('=== END TRANSLATION ===\n');
-    
-    const audioData = await generateSpeech(englishText, prompt);
-    const wavPath = path.join(__dirname, 'output-audio.wav');
-    const mp3Path = path.join(__dirname, 'output-audio.mp3');
-    
-    await saveWaveFile(wavPath, audioData);
-    console.log(`WAV file saved to: ${wavPath}`);
-    
-    await new Promise((resolve, reject) => {
-      ffmpeg(wavPath)
-        .toFormat('mp3')
-        .audioCodec('libmp3lame')
-        .audioBitrate(128)
-        .on('end', () => {
-          console.log(`MP3 conversion completed: ${mp3Path}`);
-          resolve();
-        })
-        .on('error', reject)
-        .save(mp3Path);
-    });
-    
-  } catch (err) {
-    console.error('Error in test function:', err.message);
-  }
-}
 
-async function testTTSOnly() {
-  try {
-    console.log('Testing TTS with translation-results.txt...');
-    
-    const translationPath = path.join(__dirname, 'translation-results.txt');
-    if (!fs.existsSync(translationPath)) {
-      console.error('translation-results.txt not found');
-      return;
-    }
-    
-    const englishText = fs.readFileSync(translationPath, 'utf8');
-    console.log('Translation text loaded:', englishText.substring(0, 100) + '...');
-    
-    const promptPath = path.join(__dirname, 'prompt.txt');
-    let prompt = '';
-    try {
-      prompt = fs.readFileSync(promptPath, 'utf8');
-    } catch (e) {
-      prompt = 'Please generate audio for the following text in the voice of a 35-year-old modern Orthodox Israeli rabbi.';
-    }
-    
-    if (!geminiApiKey) {
-      console.error('GEMINI_API_KEY environment variable is not set');
-      return;
-    }
-    
-    const audioData = await generateSpeech(englishText, prompt);
-    const wavPath = path.join(__dirname, 'tts-output.wav');
-    const mp3Path = path.join(__dirname, 'tts-output.mp3');
-    
-    await saveWaveFile(wavPath, audioData);
-    console.log(`WAV file saved to: ${wavPath}`);
-    
-    await new Promise((resolve, reject) => {
-      ffmpeg(wavPath)
-        .toFormat('mp3')
-        .audioCodec('libmp3lame')
-        .audioBitrate(128)
-        .on('end', () => {
-          console.log(`MP3 conversion completed: ${mp3Path}`);
-          resolve();
-        })
-        .on('error', reject)
-        .save(mp3Path);
-    });
-    
-  } catch (err) {
-    console.error('Error in TTS test:', err.message);
-  }
-}
-
-// Command line test runners
-if (process.argv.includes('--test')) {
-  testTranscribeAndTranslate().then(() => {
-    console.log('Test completed');
-    process.exit(0);
-  }).catch(err => {
-    console.error('Test failed:', err);
-    process.exit(1);
-  });
-}
-
-if (process.argv.includes('--tts-only')) {
-  testTTSOnly().then(() => {
-    console.log('TTS test completed');
-    process.exit(0);
-  }).catch(err => {
-    console.error('TTS test failed:', err);
-    process.exit(1);
-  });
-}
 
 // Start the server
 app.listen(port, async () => {
