@@ -80,7 +80,7 @@ async function saveAudioToStorage(audioBuffer, originalFormat = 'opus') {
         // Write audio buffer to temporary file
         fs.writeFileSync(tempInputFile, audioBuffer);
         
-        ffmpeg(tempInputFile)
+        const ffmpegProcess = ffmpeg(tempInputFile)
           .audioCodec('libmp3lame')
           .audioChannels(1) // Mono
           .audioBitrate(64) // Small size - 64kbps
@@ -96,15 +96,23 @@ async function saveAudioToStorage(audioBuffer, originalFormat = 'opus') {
             console.log('✅ Audio converted to MP3 successfully');
             // Clean up temp input file
             try { fs.unlinkSync(tempInputFile); } catch (e) {}
-          })
-          .pipe()
-          .on('data', (chunk) => {
-            chunks.push(chunk);
-          })
-          .on('end', () => {
-            const buffer = Buffer.concat(chunks);
-            resolve(buffer);
           });
+
+        const stream = ffmpegProcess.pipe();
+        
+        stream.on('data', (chunk) => {
+          chunks.push(chunk);
+        });
+        
+        stream.on('end', () => {
+          const buffer = Buffer.concat(chunks);
+          resolve(buffer);
+        });
+        
+        stream.on('error', (err) => {
+          console.error('Stream error:', err.message);
+          reject(new Error(`Stream error: ${err.message}`));
+        });
       } catch (writeError) {
         console.error('Error writing temp file:', writeError.message);
         reject(writeError);
@@ -162,7 +170,7 @@ async function saveTTSAudioToStorage(audioBuffer, fileName) {
       const mp3Buffer = await new Promise((resolve, reject) => {
         const chunks = [];
         
-        ffmpeg(tempWavFile)
+        const ffmpegProcess = ffmpeg(tempWavFile)
           .audioCodec('libmp3lame')
           .audioChannels(1) // Mono
           .audioBitrate(128) // Higher quality for TTS
@@ -173,18 +181,26 @@ async function saveTTSAudioToStorage(audioBuffer, fileName) {
             // Clean up temp file
             try { fs.unlinkSync(tempWavFile); } catch (e) {}
             reject(err);
-          })
-          .pipe()
-          .on('data', (chunk) => {
-            chunks.push(chunk);
-          })
-          .on('end', () => {
-            console.log('✅ TTS audio converted to MP3 successfully');
-            // Clean up temp input file after conversion is complete
-            try { fs.unlinkSync(tempWavFile); } catch (e) {}
-            const buffer = Buffer.concat(chunks);
-            resolve(buffer);
           });
+
+        const stream = ffmpegProcess.pipe();
+        
+        stream.on('data', (chunk) => {
+          chunks.push(chunk);
+        });
+        
+        stream.on('end', () => {
+          console.log('✅ TTS audio converted to MP3 successfully');
+          // Clean up temp input file after conversion is complete
+          try { fs.unlinkSync(tempWavFile); } catch (e) {}
+          const buffer = Buffer.concat(chunks);
+          resolve(buffer);
+        });
+        
+        stream.on('error', (err) => {
+          console.error('TTS Stream error:', err.message);
+          reject(new Error(`TTS Stream error: ${err.message}`));
+        });
       });
       
       // Save to Google Cloud Storage in english folder
