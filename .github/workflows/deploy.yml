@@ -57,4 +57,9 @@ jobs:
 
     - name: Show service URL
       run: |
-        gcloud run services describe $SERVICE_NAME --region $REGION --format="value(status.url)" 
+        gcloud run services describe $SERVICE_NAME --region $REGION --format="value(status.url)"
+
+    - name: Clean up old artifacts
+      run: |
+        chmod +x cleanup-artifacts.sh
+        ./cleanup-artifacts.sh 
