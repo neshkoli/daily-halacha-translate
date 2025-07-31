@@ -515,8 +515,8 @@ app.post('/', async (req, res) => {
       console.log(`📊 Downloaded audio file size: ${(audioBuffer.length / 1024 / 1024).toFixed(2)} MB`);
       
       // Check if file is too large (WhatsApp has 16MB limit, but we'll be conservative)
-      if (audioBuffer.length > 15 * 1024 * 1024) { // 15MB
-        throw new Error('Audio file is too large (over 15MB). Please send a shorter audio message.');
+      if (audioBuffer.length > 16 * 1024 * 1024) { // 16MB (WhatsApp's actual limit)
+        throw new Error('Audio file is too large (over 16MB). Please send a shorter audio message.');
       }
 
       // Create date-based filename for both source and TTS audio
@@ -553,9 +553,9 @@ app.post('/', async (req, res) => {
       let audioMediaId = null;
       try {
         // Check if the transcribed text is too long (to avoid memory issues)
-        if (englishText.length > 1000) {
+        if (englishText.length > 4000) {
           console.log('⚠️  Text is very long, truncating for TTS to avoid memory issues');
-          const truncatedText = englishText.substring(0, 1000) + '...';
+          const truncatedText = englishText.substring(0, 4000) + '...';
           console.log(`📝 Original length: ${englishText.length} chars, truncated to: ${truncatedText.length} chars`);
           englishText = truncatedText;
         }

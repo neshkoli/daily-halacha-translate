@@ -42,7 +42,7 @@ gcloud run deploy $SERVICE_NAME \
     --platform managed \
     --allow-unauthenticated \
     --port 8080 \
-    --memory 512Mi \
+    --memory 1Gi \
     --cpu 1 \
     --min-instances 0 \
     --max-instances 2 \
