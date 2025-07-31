@@ -146,7 +146,7 @@ async function saveAudioToStorage(audioBuffer, originalFormat = 'opus') {
   }
 }
 
-// Function to save TTS audio file to Google Cloud Storage
+// Function to save TTS audio file to Google Cloud Storage and return the MP3 buffer
 async function saveTTSAudioToStorage(audioBuffer, fileName) {
   try {
     console.log(`🎤 Converting and saving TTS audio file: ${fileName}`);
@@ -214,7 +214,7 @@ async function saveTTSAudioToStorage(audioBuffer, fileName) {
       console.log(`✅ English audio file saved successfully: ${publicUrl}`);
       console.log(`📊 File size: ${(mp3Buffer.length / 1024).toFixed(2)} KB`);
       
-      return publicUrl;
+      return { publicUrl, mp3Buffer };
     } catch (error) {
       console.error('❌ Error in TTS audio processing:', error.message);
       // Clean up temp file if it exists
@@ -223,6 +223,75 @@ async function saveTTSAudioToStorage(audioBuffer, fileName) {
     }
   } catch (err) {
     console.error('❌ Error saving TTS audio to storage:', err.message);
+    throw err;
+  }
+}
+
+// Function to upload audio file to WhatsApp and get media ID
+async function uploadAudioToWhatsApp(audioBuffer, fileName) {
+  try {
+    console.log(`📤 Uploading audio to WhatsApp: ${fileName}`);
+    
+    // Create form data for file upload
+    const FormData = require('form-data');
+    const form = new FormData();
+    form.append('messaging_product', 'whatsapp');
+    form.append('file', audioBuffer, {
+      filename: fileName,
+      contentType: 'audio/mpeg'
+    });
+    
+    // Upload to WhatsApp
+    const uploadResponse = await axiosInstance.post(
+      `https://graph.facebook.com/v23.0/${whatsappPhoneNumberId}/media`,
+      form,
+      {
+        headers: {
+          ...form.getHeaders(),
+          Authorization: `Bearer ${whatsappToken}`
+        }
+      }
+    );
+    
+    const mediaId = uploadResponse.data.id;
+    console.log(`✅ Audio uploaded to WhatsApp with media ID: ${mediaId}`);
+    return mediaId;
+    
+  } catch (err) {
+    console.error('❌ Error uploading audio to WhatsApp:', err.message);
+    throw err;
+  }
+}
+
+// Function to send audio message via WhatsApp
+async function sendAudioMessage(to, mediaId) {
+  try {
+    console.log(`📱 Sending audio message to ${to} with media ID: ${mediaId}`);
+    
+    const response = await axiosInstance.post(
+      `https://graph.facebook.com/v23.0/${whatsappPhoneNumberId}/messages`,
+      {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: to,
+        type: 'audio',
+        audio: {
+          id: mediaId
+        }
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${whatsappToken}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    
+    console.log(`✅ Audio message sent successfully to ${to}`);
+    return response.data;
+    
+  } catch (err) {
+    console.error('❌ Error sending audio message:', err.message);
     throw err;
   }
 }
@@ -475,15 +544,22 @@ app.post('/', async (req, res) => {
       // Generate TTS from the original audio using the same prompt
       console.log('🎤 Generating TTS from original audio...');
       let ttsAudioFileUrl = null;
+      let audioMediaId = null;
       try {
         // Generate speech from the original audio (we'll use the audio buffer as input)
         // For TTS, we'll use the transcribed text as input to generate speech
         const ttsPrompt = 'Please generate audio for the following text in the voice of a 35-year-old modern Orthodox Israeli rabbi.';
         const ttsAudioData = await generateSpeech(englishText, ttsPrompt);
         
-        // Save TTS audio to storage
-        ttsAudioFileUrl = await saveTTSAudioToStorage(ttsAudioData, fileName);
+        // Save TTS audio to storage and get MP3 buffer
+        const ttsResult = await saveTTSAudioToStorage(ttsAudioData, fileName);
+        ttsAudioFileUrl = ttsResult.publicUrl;
         console.log(`🎤 TTS audio file URL: ${ttsAudioFileUrl}`);
+        
+        // Upload audio to WhatsApp and get media ID
+        audioMediaId = await uploadAudioToWhatsApp(ttsResult.mp3Buffer, fileName);
+        console.log(`📤 Audio uploaded to WhatsApp with media ID: ${audioMediaId}`);
+        
       } catch (ttsError) {
         console.error('Warning: Failed to generate or save TTS audio:', ttsError.message);
         // Continue processing even if TTS fails
@@ -491,8 +567,8 @@ app.post('/', async (req, res) => {
 
       console.log('Transcription, translation, and TTS completed...');
       
-      // Send both the translation text and TTS audio
-      const messageBody = `🎤 Translation: ${englishText}\n\n📁 Source Audio: ${sourceAudioFileUrl || 'Not available'}\n🎵 English Audio: ${ttsAudioFileUrl || 'Not available'}`;
+      // Send the translation text first
+      const messageBody = `🎤 Translation: ${englishText}\n\n📁 Source Audio: ${sourceAudioFileUrl || 'Not available'}`;
       
       await axiosInstance.post(
         `https://graph.facebook.com/v23.0/${whatsappPhoneNumberId}/messages`,
@@ -509,7 +585,32 @@ app.post('/', async (req, res) => {
         }
       );
 
-      console.log('Replied with text translation to WhatsApp user:', from);
+      console.log('Sent text translation to WhatsApp user:', from);
+      
+      // Send the English audio as an audio message if available
+      if (audioMediaId) {
+        try {
+          await sendAudioMessage(from, audioMediaId);
+          console.log('Sent English audio message to WhatsApp user:', from);
+        } catch (audioError) {
+          console.error('Warning: Failed to send audio message:', audioError.message);
+          // Send fallback text with link
+          await axiosInstance.post(
+            `https://graph.facebook.com/v23.0/${whatsappPhoneNumberId}/messages`,
+            {
+              messaging_product: 'whatsapp',
+              to: from,
+              text: { body: `🎵 English Audio: ${ttsAudioFileUrl}` }
+            },
+            {
+              headers: {
+                Authorization: `Bearer ${whatsappToken}`,
+                'Content-Type': 'application/json'
+              }
+            }
+          );
+        }
+      }
       res.status(200).end();
       return;
 
