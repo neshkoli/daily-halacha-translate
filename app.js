@@ -545,7 +545,7 @@ app.post('/', async (req, res) => {
       }
 
       // Transcribe and translate
-      const englishText = await transcribeAndTranslate(audioBuffer, prompt);
+      let englishText = await transcribeAndTranslate(audioBuffer, prompt);
 
       // Generate TTS from the original audio using the same prompt
       console.log('🎤 Generating TTS from original audio...');
