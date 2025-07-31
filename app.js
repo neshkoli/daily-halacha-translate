@@ -69,33 +69,47 @@ async function saveAudioToStorage(audioBuffer, originalFormat = 'opus') {
     
     console.log(`📁 Converting and saving audio file: ${fileName}`);
     
-    // Convert audio to MP3 using ffmpeg
+    // Convert audio to MP3 using ffmpeg with temporary file
     const mp3Buffer = await new Promise((resolve, reject) => {
       const chunks = [];
       
-      ffmpeg()
-        .input(audioBuffer)
-        .inputFormat(originalFormat)
-        .audioCodec('libmp3lame')
-        .audioChannels(1) // Mono
-        .audioBitrate(64) // Small size - 64kbps
-        .audioFrequency(22050) // Lower frequency for smaller size
-        .toFormat('mp3')
-        .on('error', (err) => {
-          console.error('FFmpeg conversion error:', err.message);
-          reject(err);
-        })
-        .on('end', () => {
-          console.log('✅ Audio converted to MP3 successfully');
-        })
-        .pipe()
-        .on('data', (chunk) => {
-          chunks.push(chunk);
-        })
-        .on('end', () => {
-          const buffer = Buffer.concat(chunks);
-          resolve(buffer);
-        });
+      // Create temporary input file
+      const tempInputFile = `/tmp/temp_audio_${Date.now()}.${originalFormat}`;
+      const tempOutputFile = `/tmp/temp_audio_${Date.now()}.mp3`;
+      
+      try {
+        // Write audio buffer to temporary file
+        fs.writeFileSync(tempInputFile, audioBuffer);
+        
+        ffmpeg(tempInputFile)
+          .audioCodec('libmp3lame')
+          .audioChannels(1) // Mono
+          .audioBitrate(64) // Small size - 64kbps
+          .audioFrequency(22050) // Lower frequency for smaller size
+          .toFormat('mp3')
+          .on('error', (err) => {
+            console.error('FFmpeg conversion error:', err.message);
+            // Clean up temp file
+            try { fs.unlinkSync(tempInputFile); } catch (e) {}
+            reject(err);
+          })
+          .on('end', () => {
+            console.log('✅ Audio converted to MP3 successfully');
+            // Clean up temp input file
+            try { fs.unlinkSync(tempInputFile); } catch (e) {}
+          })
+          .pipe()
+          .on('data', (chunk) => {
+            chunks.push(chunk);
+          })
+          .on('end', () => {
+            const buffer = Buffer.concat(chunks);
+            resolve(buffer);
+          });
+      } catch (writeError) {
+        console.error('Error writing temp file:', writeError.message);
+        reject(writeError);
+      }
     });
     
     // Create file in bucket
