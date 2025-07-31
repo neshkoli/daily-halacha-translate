@@ -174,16 +174,14 @@ async function saveTTSAudioToStorage(audioBuffer, fileName) {
             try { fs.unlinkSync(tempWavFile); } catch (e) {}
             reject(err);
           })
-          .on('end', () => {
-            console.log('✅ TTS audio converted to MP3 successfully');
-            // Clean up temp input file
-            try { fs.unlinkSync(tempWavFile); } catch (e) {}
-          })
           .pipe()
           .on('data', (chunk) => {
             chunks.push(chunk);
           })
           .on('end', () => {
+            console.log('✅ TTS audio converted to MP3 successfully');
+            // Clean up temp input file after conversion is complete
+            try { fs.unlinkSync(tempWavFile); } catch (e) {}
             const buffer = Buffer.concat(chunks);
             resolve(buffer);
           });
@@ -506,11 +504,20 @@ app.post('/', async (req, res) => {
       );
       const mediaUrl = mediaRes.data.url;
 
+      console.log(`📥 Downloading audio file from WhatsApp...`);
       const audioRes = await axiosInstance.get(mediaUrl, {
         headers: { Authorization: `Bearer ${whatsappToken}` },
-        responseType: 'arraybuffer'
+        responseType: 'arraybuffer',
+        timeout: 60000 // 60 second timeout for large files
       });
       const audioBuffer = Buffer.from(audioRes.data, 'binary');
+      
+      console.log(`📊 Downloaded audio file size: ${(audioBuffer.length / 1024 / 1024).toFixed(2)} MB`);
+      
+      // Check if file is too large (WhatsApp has 16MB limit, but we'll be conservative)
+      if (audioBuffer.length > 15 * 1024 * 1024) { // 15MB
+        throw new Error('Audio file is too large (over 15MB). Please send a shorter audio message.');
+      }
 
       // Create date-based filename for both source and TTS audio
       const now = new Date();
@@ -545,6 +552,14 @@ app.post('/', async (req, res) => {
       let ttsAudioFileUrl = null;
       let audioMediaId = null;
       try {
+        // Check if the transcribed text is too long (to avoid memory issues)
+        if (englishText.length > 1000) {
+          console.log('⚠️  Text is very long, truncating for TTS to avoid memory issues');
+          const truncatedText = englishText.substring(0, 1000) + '...';
+          console.log(`📝 Original length: ${englishText.length} chars, truncated to: ${truncatedText.length} chars`);
+          englishText = truncatedText;
+        }
+        
         // Generate speech from the original audio (we'll use the audio buffer as input)
         // For TTS, we'll use the transcribed text as input to generate speech
         const ttsPrompt = 'Please generate audio for the following text in the voice of a 35-year-old modern Orthodox Israeli rabbi.';
