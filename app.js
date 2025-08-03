@@ -367,7 +367,7 @@ async function generateSpeech(text, prompt) {
         responseModalities: ['AUDIO'],
         speechConfig: {
           voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: 'Enceladus' },
+            prebuiltVoiceConfig: { voiceName: 'Iapetus' },
           },
         },
       },
